@@ -52,7 +52,7 @@ A primeira sincronização de uma loja real (46 assinaturas abertas) contradiz a
 - Todas as assinaturas foram criadas **com** `products` e com o valor cheio; `discount` vem `null`.
 - Mesmo assim, **toda** cobrança recorrente já feita (10 de 10) saiu com o mesmo desconto do pedido de origem: o pedido do ciclo tem `sub_total` = valor cheio e `discount` = desconto do pedido de origem.
 - O desconto é limitado para a cobrança não ficar abaixo de R$ 5,00. Em assinaturas de teste de R$ 1,00 a cobrança saiu **negativa** (`"-24.51"`).
-- Quando um pedido gera várias assinaturas, o desconto do pedido inteiro é aplicado de novo em cada uma, mas a divisão não fecha com nenhuma regra que conseguimos identificar.
+- Quando um pedido gera várias assinaturas, o desconto do pedido é dividido em partes iguais entre elas (R$ 56,31 em 3 assinaturas = R$ 18,77 em cada cobrança), ainda respeitando o mínimo de R$ 5,00.
 - Nesses pedidos o frete vem somado em `sub_total` com `shipping_value: 0`, e o frete grátis aparece dentro de `discount`. Por isso o "desconto repetido" inclui o frete grátis do primeiro pedido.
 - Algumas assinaturas têm `freight_value` cadastrado. Pela documentação o frete é somado depois do desconto, nunca é descontado, e não há endpoint para alterá-lo: só na criação da assinatura.
 

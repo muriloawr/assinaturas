@@ -54,14 +54,20 @@ describe("auditSubscription", () => {
     expect(finding?.message).toContain("mesmo desconto do pedido de origem");
   });
 
-  it("reconhece o desconto limitado ao mínimo de R$ 5,00 e conta cobranças em atraso", () => {
-    const [finding] = auditSubscription(
-      withProducts(7429),
-      [{ cycle: 1, status: "overdue", valueCents: 500 }],
-      { discountCents: 22010, subTotalCents: 60492 },
-    );
-    expect(finding).toMatchObject({ kind: "charged_below_catalog", lossPerCycleCents: 6929 });
-    expect(finding?.message).toContain("mesmo desconto do pedido de origem");
+  // Caso real: pedido com R$ 220,10 de desconto gerou 3 assinaturas (R$ 73,37 para cada).
+  it("divide o desconto entre as assinaturas do mesmo pedido e respeita o mínimo de R$ 5,00", () => {
+    const shared = { discountCents: 22010, subTotalCents: 60492 };
+    const [below] = auditSubscription(withProducts(8797), [{ cycle: 1, status: "paid", valueCents: 1460 }], shared, {
+      sharedOriginCount: 3,
+    });
+    expect(below).toMatchObject({ kind: "charged_below_catalog", lossPerCycleCents: 7337 });
+    expect(below?.message).toContain("mesmo desconto do pedido de origem");
+
+    const [floor] = auditSubscription(withProducts(7429), [{ cycle: 1, status: "overdue", valueCents: 500 }], shared, {
+      sharedOriginCount: 3,
+    });
+    expect(floor).toMatchObject({ kind: "charged_below_catalog", lossPerCycleCents: 6929 });
+    expect(floor?.message).toContain("mesmo desconto do pedido de origem");
   });
 
   it("ignora desconto só no primeiro ciclo (o comportamento correto)", () => {
@@ -91,15 +97,15 @@ describe("auditSubscription", () => {
     expect(finding).toMatchObject({ kind: "coupon_expected", severity: "medium", lossPerCycleCents: 832 });
   });
 
-  it("não soma a previsão quando o pedido de origem é dividido entre assinaturas", () => {
+  // Caso real: R$ 56,31 de desconto em um pedido que gerou 3 assinaturas; cada uma saiu com R$ 18,77.
+  it("prevê a parte do desconto quando o pedido de origem é dividido entre assinaturas", () => {
     const [finding] = auditSubscription(
       withProducts(4797),
       [],
       { discountCents: 5631, subTotalCents: 16685 },
       { sharedOriginCount: 3 },
     );
-    expect(finding).toMatchObject({ kind: "coupon_expected", lossPerCycleCents: null });
-    expect(finding?.message).toMatch(/até R\$\s42,97/);
+    expect(finding).toMatchObject({ kind: "coupon_expected", lossPerCycleCents: 1877 });
   });
 
   it("aponta frete cadastrado junto com o desconto", () => {

@@ -7,7 +7,8 @@ import type { Order, Subscription, SubscriptionCharge } from "@assinaturas/db";
 // O que vimos nos dados reais (loja Shopify, outubro de 2026): a assinatura é
 // criada com os produtos e o valor cheio, `discount` vem vazio, mas cada
 // cobrança recorrente sai com o mesmo desconto do pedido de origem (limitado ao
-// mínimo de R$ 5,00 por cobrança). Isso contradiz a documentação ("o cupom do
+// mínimo de R$ 5,00 por cobrança). Quando o pedido gerou várias assinaturas, o
+// desconto é dividido em partes iguais entre elas. Isso contradiz a documentação ("o cupom do
 // pedido de origem não é herdado").
 //
 // Causa conhecida na documentação ("Criar assinatura" e "Adicionar produtos"):
@@ -40,7 +41,7 @@ export interface AuditFinding {
 }
 
 export interface AuditContext {
-  /** Quantas assinaturas saíram do mesmo pedido de origem (o desconto é do pedido inteiro). */
+  /** Quantas assinaturas saíram do mesmo pedido de origem (o desconto é dividido entre elas). */
   sharedOriginCount?: number;
 }
 
@@ -112,10 +113,10 @@ function couponFinding(
   if (lastRecurring) {
     const lossCents = catalogCents - lastRecurring.valueCents;
     if (lossCents <= TOLERANCE_CENTS) return null;
-    const originDiscount = originOrder?.discountCents ?? null;
+    const originDiscount = originOrder ? discountShare(originOrder.discountCents, context) : null;
     const repeatsOrigin =
       originDiscount !== null &&
-      Math.abs(Math.min(originDiscount, catalogCents - MIN_CHARGE_CENTS) - lossCents) <= TOLERANCE_CENTS;
+      Math.abs(expectedLoss(originDiscount, catalogCents) - lossCents) <= TOLERANCE_CENTS;
     return {
       kind: "charged_below_catalog",
       severity: "high",
@@ -128,20 +129,31 @@ function couponFinding(
   }
 
   if (originOrder && originOrder.discountCents > TOLERANCE_CENTS) {
-    const maxLossCents = Math.max(0, Math.min(originOrder.discountCents, catalogCents - MIN_CHARGE_CENTS));
+    const share = discountShare(originOrder.discountCents, context);
+    const lossCents = expectedLoss(share, catalogCents);
     const shared = (context.sharedOriginCount ?? 1) > 1;
     return {
       kind: "coupon_expected",
       severity: "medium",
       message: shared
-        ? `Ainda sem cobrança recorrente. O pedido de origem, dividido com outras ${context.sharedOriginCount! - 1} assinatura(s), teve ${formatBRL(originOrder.discountCents)} de desconto; se ele se repetir, a próxima cobrança pode sair até ${formatBRL(maxLossCents)} abaixo do catálogo.`
-        : `Ainda sem cobrança recorrente. O pedido de origem teve ${formatBRL(originOrder.discountCents)} de desconto; se ele se repetir, a próxima cobrança sai ${formatBRL(maxLossCents)} abaixo do catálogo (${formatBRL(catalogCents)}).`,
-      lossPerCycleCents: shared ? null : maxLossCents,
+        ? `Ainda sem cobrança recorrente. O pedido de origem gerou ${context.sharedOriginCount} assinaturas e teve ${formatBRL(originOrder.discountCents)} de desconto (${formatBRL(share)} para cada); se ele se repetir, a próxima cobrança sai ${formatBRL(lossCents)} abaixo do catálogo (${formatBRL(catalogCents)}).`
+        : `Ainda sem cobrança recorrente. O pedido de origem teve ${formatBRL(originOrder.discountCents)} de desconto; se ele se repetir, a próxima cobrança sai ${formatBRL(lossCents)} abaixo do catálogo (${formatBRL(catalogCents)}).`,
+      lossPerCycleCents: lossCents,
       extraPerCycleCents: null,
     };
   }
 
   return null;
+}
+
+/** Parte do desconto do pedido de origem que cabe a cada assinatura gerada por ele. */
+function discountShare(discountCents: number, context: AuditContext): number {
+  return Math.round(discountCents / Math.max(1, context.sharedOriginCount ?? 1));
+}
+
+/** Desconto efetivo na cobrança: a Appmax não cobra menos que R$ 5,00. */
+function expectedLoss(discountCents: number, catalogCents: number): number {
+  return Math.max(0, Math.min(discountCents, catalogCents - MIN_CHARGE_CENTS));
 }
 
 export function formatBRL(cents: number): string {
