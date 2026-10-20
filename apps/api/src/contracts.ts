@@ -33,11 +33,12 @@ export interface SubscriptionDetailDto {
   subscription: SubscriptionDto;
   charges: ChargeDto[];
   originOrder: OrderDto | null;
-  finding: AuditFinding | null;
+  findings: AuditFinding[];
   events: WebhookEventDto[];
   auditLogs: AuditLogDto[];
 }
 
+/** Uma linha por achado: a mesma assinatura pode ter desconto indevido e frete. */
 export interface CouponAuditRow extends AuditFinding {
   appmaxId: number;
   status: string;
@@ -52,8 +53,13 @@ export interface CouponAuditRow extends AuditFinding {
 export interface CouponAuditReport {
   generatedAt: string;
   analyzed: number;
-  /** Assinaturas com achado de severidade alta ou média. */
+  /** Assinaturas com desconto indevido (achado de severidade alta ou média). */
   affected: number;
+  /** Soma das diferenças conhecidas; não inclui pedidos de origem divididos entre assinaturas. */
   lossPerCycleCents: number;
+  /** Assinaturas com frete cadastrado. */
+  withFreight: number;
+  /** Frete que os assinantes pagam por ciclo. */
+  extraPerCycleCents: number;
   rows: CouponAuditRow[];
 }

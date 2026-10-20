@@ -21,10 +21,9 @@ export default async function CouponReportPage({ params }: { params: Promise<{ s
       </div>
 
       <div className="alert">
-        Assinaturas criadas na Appmax <strong>sem a lista de produtos</strong> herdam o valor do primeiro pedido.
-        Se esse pedido teve cupom, o desconto passa a valer em todas as cobranças. Este relatório só aponta
-        os casos; corrigir o valor de quem já assina é uma decisão comercial e exige aviso prévio ao
-        assinante.
+        Aponta cobranças recorrentes que saíram (ou devem sair) com o <strong>desconto do primeiro pedido</strong>{" "}
+        e assinaturas com <strong>frete cadastrado</strong>. Este relatório só aponta os casos; corrigir o valor
+        de quem já assina é uma decisão comercial e exige aviso prévio ao assinante.
       </div>
 
       <div className="cards">
@@ -39,6 +38,14 @@ export default async function CouponReportPage({ params }: { params: Promise<{ s
         <div className="card">
           <div className="label">Não cobrado por ciclo (estimado)</div>
           <div className="value">{money(report.lossPerCycleCents)}</div>
+        </div>
+        <div className="card">
+          <div className="label">Com frete cadastrado</div>
+          <div className="value">{report.withFreight}</div>
+        </div>
+        <div className="card">
+          <div className="label">Frete cobrado por ciclo</div>
+          <div className="value">{money(report.extraPerCycleCents)}</div>
         </div>
       </div>
 
@@ -58,7 +65,7 @@ export default async function CouponReportPage({ params }: { params: Promise<{ s
           </thead>
           <tbody>
             {report.rows.map((r) => (
-              <tr key={r.appmaxId}>
+              <tr key={`${r.appmaxId}-${r.kind}`}>
                 <td>
                   <Link href={`/lojas/${storeId}/assinaturas/${r.appmaxId}`}>#{r.appmaxId}</Link>
                 </td>
@@ -73,7 +80,7 @@ export default async function CouponReportPage({ params }: { params: Promise<{ s
                 </td>
                 <td className="num">{money(r.valueCents)}</td>
                 <td className="num">{money(r.originDiscountCents)}</td>
-                <td className="num">{money(r.lossPerCycleCents)}</td>
+                <td className="num">{money(r.lossPerCycleCents ?? r.extraPerCycleCents)}</td>
                 <td>{date(r.nextChargeAt)}</td>
               </tr>
             ))}

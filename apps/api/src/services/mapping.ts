@@ -41,7 +41,7 @@ export function mapSubscription(storeId: string, detail: SubscriptionDetail, syn
     cardLast4: card?.final ?? null,
     products,
     hasProducts: products.length > 0,
-    originOrderId: originOrderId(detail.charges ?? []),
+    originOrderId: originOrderId(detail),
     appmaxCreatedAt: parseAppmaxDate(detail.created_at),
     canceledAt: parseAppmaxDate(detail.canceled_at),
     pausedFrom: parseAppmaxDate(detail.paused_from),
@@ -81,10 +81,12 @@ export function mapOrder(storeId: string, detail: OrderDetail, syncedAt: Date) {
 }
 
 /**
- * O pedido de origem é a cobrança do ciclo 0. Nem sempre ela vem no histórico
- * da API; nesse caso devolvemos null e o pedido de origem fica com o que já
- * estava gravado ou com o `order_id` do webhook `subscription_created`.
+ * A API real traz o pedido de origem em `original_order_id` (fora da
+ * documentação). Sem ele, procuramos a cobrança do ciclo 0, que quase nunca
+ * vem no histórico; sem nenhum dos dois devolvemos null e o pedido de origem
+ * fica com o que já estava gravado ou com o `order_id` do webhook
+ * `subscription_created`.
  */
-export function originOrderId(charges: AppmaxCharge[]): number | null {
-  return charges.find((c) => c.cycle === 0)?.order_id ?? null;
+export function originOrderId(detail: Pick<SubscriptionDetail, "original_order_id" | "charges">): number | null {
+  return detail.original_order_id ?? detail.charges?.find((c) => c.cycle === 0)?.order_id ?? null;
 }

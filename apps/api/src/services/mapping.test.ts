@@ -1,6 +1,6 @@
 import type { SubscriptionDetail } from "@assinaturas/appmax";
 import { describe, expect, it } from "vitest";
-import { mapSubscription } from "./mapping.ts";
+import { mapCharge, mapSubscription } from "./mapping.ts";
 
 // Exemplo da documentação de GET /v1/subscriptions/{id}.
 const detail: SubscriptionDetail = {
@@ -60,7 +60,16 @@ describe("mapSubscription", () => {
     expect(row.lastChargeAt?.toISOString()).toBe("2026-07-15T03:00:00.000Z");
   });
 
-  it("não inventa pedido de origem quando o ciclo 0 não está no histórico", () => {
+  it("usa original_order_id como pedido de origem", () => {
+    expect(mapSubscription("store", { ...detail, original_order_id: 777 }, new Date(0)).originOrderId).toBe(777);
+  });
+
+  it("aceita o valor da cobrança como texto", () => {
+    const charge = { ...detail.charges[0]!, value: "35.33" };
+    expect(mapCharge("store", "sub", charge).valueCents).toBe(3533);
+  });
+
+  it("não inventa pedido de origem sem original_order_id nem ciclo 0 no histórico", () => {
     expect(mapSubscription("store", detail, new Date(0)).originOrderId).toBeNull();
     const withOrigin = { ...detail, charges: [...detail.charges, { ...detail.charges[0]!, cycle: 0, order_id: 12345 }] };
     expect(mapSubscription("store", withOrigin, new Date(0)).originOrderId).toBe(12345);

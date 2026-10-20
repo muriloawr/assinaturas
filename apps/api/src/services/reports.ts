@@ -31,35 +31,46 @@ export async function couponAuditReport(db: Db, storeId: string): Promise<Coupon
   const chargesBySub = Map.groupBy(charges, (c) => c.subscriptionId);
   const orderById = new Map(originOrders.map((o) => [o.appmaxOrderId, o]));
 
+  const subsByOrigin = Map.groupBy(subs, (s) => s.originOrderId);
+
   const rows: CouponAuditRow[] = [];
   for (const sub of subs) {
     const origin = sub.originOrderId ? (orderById.get(sub.originOrderId) ?? null) : null;
-    const finding = auditSubscription(sub, chargesBySub.get(sub.id) ?? [], origin);
-    if (!finding) continue;
-    rows.push({
-      appmaxId: sub.appmaxId,
-      status: sub.status,
-      customerName: sub.customerName,
-      customerEmail: sub.customerEmail,
-      valueCents: sub.valueCents,
-      originOrderId: sub.originOrderId,
-      originDiscountCents: origin?.discountCents ?? null,
-      nextChargeAt: sub.nextChargeAt?.toISOString() ?? null,
-      ...finding,
+    const findings = auditSubscription(sub, chargesBySub.get(sub.id) ?? [], origin, {
+      sharedOriginCount: sub.originOrderId ? subsByOrigin.get(sub.originOrderId)?.length : 1,
     });
+    for (const finding of findings) {
+      rows.push({
+        appmaxId: sub.appmaxId,
+        status: sub.status,
+        customerName: sub.customerName,
+        customerEmail: sub.customerEmail,
+        valueCents: sub.valueCents,
+        originOrderId: sub.originOrderId,
+        originDiscountCents: origin?.discountCents ?? null,
+        nextChargeAt: sub.nextChargeAt?.toISOString() ?? null,
+        ...finding,
+      });
+    }
   }
+
+  const affectedIds = (filter: (r: CouponAuditRow) => boolean) =>
+    new Set(rows.filter(filter).map((r) => r.appmaxId)).size;
 
   rows.sort(
     (a, b) =>
       SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-      (b.lossPerCycleCents ?? 0) - (a.lossPerCycleCents ?? 0),
+      (b.lossPerCycleCents ?? 0) - (a.lossPerCycleCents ?? 0) ||
+      (a.nextChargeAt ?? "").localeCompare(b.nextChargeAt ?? ""),
   );
 
   return {
     generatedAt: new Date().toISOString(),
     analyzed: subs.length,
-    affected: rows.filter((r) => r.severity !== "low").length,
+    affected: affectedIds((r) => r.severity !== "low" && r.kind !== "freight_registered"),
     lossPerCycleCents: rows.reduce((sum, r) => sum + (r.lossPerCycleCents ?? 0), 0),
+    withFreight: affectedIds((r) => r.kind === "freight_registered"),
+    extraPerCycleCents: rows.reduce((sum, r) => sum + (r.extraPerCycleCents ?? 0), 0),
     rows,
   };
 }

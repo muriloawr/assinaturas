@@ -34,4 +34,10 @@ describe("reaisToCents", () => {
     expect(reaisToCents(0.1 + 0.2)).toBe(30);
     expect(reaisToCents(null)).toBeNull();
   });
+
+  it("aceita o texto que a API devolve nas cobranças", () => {
+    expect(reaisToCents("35.33")).toBe(3533);
+    expect(reaisToCents("-24.51")).toBe(-2451);
+    expect(reaisToCents("abc")).toBeNull();
+  });
 });

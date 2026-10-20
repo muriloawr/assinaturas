@@ -1,6 +1,10 @@
-// Tipos da API da Appmax, escritos a partir de https://docs.appmax.com.br.
-// Os campos seguem exatamente os nomes da API; valores de assinatura vêm em
-// reais (number) e valores de pedido vêm em centavos (integer).
+// Tipos da API da Appmax, escritos a partir de https://docs.appmax.com.br e
+// conferidos com respostas reais de produção (outubro de 2026). Os campos
+// seguem exatamente os nomes da API; valores de assinatura vêm em reais e
+// valores de pedido vêm em centavos (integer).
+//
+// Campos opcionais marcados "fora da documentação" aparecem nas respostas
+// reais, mas não nos exemplos da documentação.
 
 export type AppmaxEnvironment = "sandbox" | "production";
 
@@ -40,7 +44,9 @@ export interface SubscriptionCharge {
   shopify_order_id: string | null;
   /** dd/mm/aaaa */
   charged_at: string | null;
-  value: number;
+  /** A documentação mostra number, mas a API real devolve texto ("35.33"), às vezes negativo. */
+  value: number | string;
+  /** "paid", "overdue", ... */
   status: string;
 }
 
@@ -69,8 +75,21 @@ export interface SubscriptionPaymentInfo {
   } | null;
 }
 
+/** Campos que vêm no detalhe e na listagem, fora da documentação. */
+export interface SubscriptionExtras {
+  /** Pedido que originou a assinatura. O histórico de cobranças não traz o ciclo 0. */
+  original_order_id?: number | null;
+  original_shopify_order_id?: string | null;
+  tag?: string | null;
+  /** Desconto permanente da assinatura (PATCH /discount). */
+  discount?: number | null;
+  discount_type?: DiscountType | null;
+  cycle_changes?: unknown[];
+  skipped_cycles?: unknown[];
+}
+
 /** GET /v1/subscriptions/{id} */
-export interface SubscriptionDetail {
+export interface SubscriptionDetail extends SubscriptionExtras {
   subscription_id: number;
   status: SubscriptionStatus;
   products: SubscriptionProduct[];
@@ -92,15 +111,25 @@ export interface SubscriptionDetail {
   canceled_at: string | null;
   paused_from: string | null;
   paused_until: string | null;
+  /** Fora da documentação. */
+  pause_reason?: string | null;
+  /** Fora da documentação. */
+  cancel_reason?: string | null;
 }
 
 /** Item de GET /v1/subscriptions. Note que aqui `next_charge_at` vem como dd/mm/aaaa. */
-export interface SubscriptionListItem {
+export interface SubscriptionListItem extends SubscriptionExtras {
   subscription_id: number;
   status: SubscriptionStatus;
   products: SubscriptionProduct[];
   value: number;
   freight_value: number | null;
+  /** Fora da documentação. */
+  interval?: SubscriptionInterval;
+  /** Fora da documentação. */
+  interval_count?: number;
+  /** Fora da documentação. aaaa-mm-dd hh:mm:ss */
+  created_at?: string;
   current_cycle: number;
   customer: SubscriptionCustomer;
   payment: SubscriptionPaymentInfo | null;
@@ -134,13 +163,19 @@ export interface ListSubscriptionsParams {
 export interface OrderDetail {
   order: {
     id: number;
+    /** Em português: "aprovado", "integrado", "cancelado", ... */
     status: string;
     total_paid: number;
     amounts: {
+      /**
+       * Em pedidos vindos da Shopify o frete pode vir somado aqui, com
+       * `shipping_value` zerado, e o frete grátis aparecer como `discount`.
+       */
       sub_total: number;
       shipping_value: number;
       discount: number;
-      installment_fee: number;
+      /** Não vem na API real. */
+      installment_fee?: number;
     };
     created_at: string;
     updated_at: string;
@@ -151,13 +186,18 @@ export interface OrderDetail {
     email: string;
     document_number: string | null;
   };
+  /** Pedidos cancelados trazem só `method`. */
   payment: {
     method: string;
-    installments: number | null;
-    installments_amount: number | null;
+    installments?: number | null;
+    installments_amount?: number | null;
     card?: { brand: string | null; number: string | null } | null;
-    paid_at: string | null;
+    paid_at?: string | null;
   } | null;
+  /** Fora da documentação. Preços em centavos. */
+  products?: { id: number; name: string; sku: string | null; price: number; quantity: number }[];
+  /** Fora da documentação. */
+  split_orders?: unknown;
 }
 
 export interface PauseSubscriptionInput {

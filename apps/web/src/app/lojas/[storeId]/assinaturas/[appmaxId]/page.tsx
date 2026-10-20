@@ -4,6 +4,13 @@ import { api, ApiError } from "@/lib/api";
 import { date, dateTime, intervalLabel, money, statusLabel } from "@/lib/format";
 import { syncSubscription } from "../../actions";
 
+const FINDING_TITLES: Partial<Record<SubscriptionDetailDto["findings"][number]["kind"], string>> = {
+  coupon_inherited: "Desconto indevido",
+  charged_below_catalog: "Desconto indevido",
+  coupon_expected: "Desconto deve se repetir",
+  freight_registered: "Frete cadastrado",
+};
+
 export default async function SubscriptionPage({
   params,
 }: {
@@ -17,7 +24,7 @@ export default async function SubscriptionPage({
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
-  const { subscription: s, charges, originOrder, finding, events } = detail;
+  const { subscription: s, charges, originOrder, findings, events } = detail;
   const catalogCents = s.products.reduce((sum, p) => sum + p.priceCents * p.quantity, 0);
 
   return (
@@ -36,14 +43,14 @@ export default async function SubscriptionPage({
         </form>
       </div>
 
-      {finding && (
-        <div className={`alert ${finding.severity}`}>
-          <strong>{finding.severity === "low" ? "Atenção" : "Desconto indevido"}:</strong> {finding.message}
+      {findings.map((finding) => (
+        <div key={finding.kind} className={`alert ${finding.severity}`}>
+          <strong>{FINDING_TITLES[finding.kind] ?? "Atenção"}:</strong> {finding.message}
           {finding.lossPerCycleCents !== null && (
             <> Diferença estimada: {money(finding.lossPerCycleCents)} por ciclo.</>
           )}
         </div>
-      )}
+      ))}
 
       <dl className="grid">
         <div>

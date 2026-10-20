@@ -41,15 +41,15 @@ function subscription(overrides: Partial<SubscriptionDetail>): SubscriptionDetai
 }
 
 // Assinatura 101: criada sem produtos a partir de um pedido com R$ 20 de cupom (o bug).
-// Assinatura 102: criada com produtos, cupom só no ciclo 0 (correta).
+// Assinatura 102: criada com produtos, cupom só no pedido de origem (correta).
 const appmax = {
   subscriptions: new Map<number, SubscriptionDetail>([
     [
       101,
       subscription({
         subscription_id: 101,
+        original_order_id: 5001,
         charges: [
-          { cycle: 0, order_id: 5001, shopify_order_id: null, charged_at: "10/09/2026", value: 80, status: "paid" },
           { cycle: 1, order_id: 5002, shopify_order_id: null, charged_at: "10/10/2026", value: 80, status: "paid" },
         ],
       }),
@@ -58,6 +58,7 @@ const appmax = {
       102,
       subscription({
         subscription_id: 102,
+        original_order_id: 6001,
         value: 100,
         products: [
           {
@@ -73,8 +74,7 @@ const appmax = {
           },
         ],
         charges: [
-          { cycle: 0, order_id: 6001, shopify_order_id: null, charged_at: "10/09/2026", value: 80, status: "paid" },
-          { cycle: 1, order_id: 6002, shopify_order_id: null, charged_at: "10/10/2026", value: 100, status: "paid" },
+          { cycle: 1, order_id: 6002, shopify_order_id: null, charged_at: "10/10/2026", value: "100.00", status: "paid" },
         ],
       }),
     ],
@@ -191,8 +191,8 @@ describe.skipIf(!DATABASE_URL)("integração com o banco", () => {
 
   it("sincronizar de novo é idempotente e mantém o pedido de origem", async () => {
     const original = appmax.subscriptions.get(101)!;
-    // O histórico deixa de trazer o ciclo 0.
-    appmax.subscriptions.set(101, { ...original, charges: original.charges.filter((c) => c.cycle > 0) });
+    // A resposta deixa de trazer o pedido de origem.
+    appmax.subscriptions.set(101, { ...original, original_order_id: null });
     await sync.syncSubscription(storeId, 101);
     appmax.subscriptions.set(101, original);
 

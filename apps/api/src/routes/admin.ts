@@ -7,7 +7,7 @@ import {
   type Store,
   type Subscription,
 } from "@assinaturas/db";
-import { and, count, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app.ts";
@@ -124,7 +124,7 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps) {
         .where(and(eq(subscriptions.storeId, store.id), eq(subscriptions.appmaxId, appmaxId)));
       if (!subscription) return reply.code(404).send({ error: "assinatura não encontrada no espelho" });
 
-      const [charges, [originOrder], events, logs] = await Promise.all([
+      const [charges, [originOrder], events, logs, [sharedOrigin]] = await Promise.all([
         deps.db
           .select()
           .from(subscriptionCharges)
@@ -148,13 +148,27 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps) {
           .where(and(eq(auditLogs.storeId, store.id), eq(auditLogs.appmaxSubscriptionId, appmaxId)))
           .orderBy(desc(auditLogs.createdAt))
           .limit(50),
+        subscription.originOrderId
+          ? deps.db
+              .select({ total: count() })
+              .from(subscriptions)
+              .where(
+                and(
+                  eq(subscriptions.storeId, store.id),
+                  eq(subscriptions.originOrderId, subscription.originOrderId),
+                  inArray(subscriptions.status, ["ACTIVE", "PAUSED", "OVERDUE"]),
+                ),
+              )
+          : Promise.resolve([]),
       ]);
 
       const detail: SubscriptionDetailDto = {
         subscription: toSubscriptionDto(subscription),
         charges: charges.map(serialize),
         originOrder: originOrder ? serialize(omit(originOrder, "raw")) : null,
-        finding: auditSubscription(subscription, charges, originOrder ?? null),
+        findings: auditSubscription(subscription, charges, originOrder ?? null, {
+          sharedOriginCount: sharedOrigin?.total,
+        }),
         events: events.map((e) => serialize(omit(e, "payload"))),
         auditLogs: logs.map(serialize),
       };

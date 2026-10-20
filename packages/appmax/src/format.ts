@@ -35,8 +35,12 @@ export function toAppmaxDay(date: Date): string {
   return brt.toISOString().slice(0, 10);
 }
 
-/** Valores de assinatura vêm em reais; guardamos tudo em centavos. */
-export function reaisToCents(value: number | null | undefined): number | null {
-  if (value === null || value === undefined) return null;
-  return Math.round(value * 100);
+/**
+ * Valores de assinatura vêm em reais; guardamos tudo em centavos. O valor das
+ * cobranças vem como texto ("35.33").
+ */
+export function reaisToCents(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const reais = typeof value === "string" ? Number(value) : value;
+  return Number.isFinite(reais) ? Math.round(reais * 100) : null;
 }

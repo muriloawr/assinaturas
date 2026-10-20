@@ -21,7 +21,7 @@ Token: `POST /oauth2/token` com `grant_type=client_credentials` (form-urlencoded
 
 - `POST /v1/subscriptions` transforma um **pedido aprovado** (cartão ou Pix) em assinatura.
 - `GET /v1/subscriptions` exige `email` **ou** intervalo `next_charge_from`/`next_charge_to`. São 10 por página. Datas da listagem vêm em `dd/mm/aaaa`.
-- `GET /v1/subscriptions/{id}` traz produtos, ciclos e histórico de cobranças. O histórico pode não incluir o ciclo 0.
+- `GET /v1/subscriptions/{id}` traz produtos, ciclos e histórico de cobranças. O histórico não inclui o ciclo 0; o pedido de origem vem em `original_order_id` (fora da documentação).
 - Cada ciclo gera um **pedido novo** (`order_id` muda; `subscription_id` não).
 - Alterar produtos só com a assinatura ativa, não pausada e sem cobrança em andamento (senão `409`/`422`).
 - Valor mínimo de cobrança: R$ 5,00.
@@ -44,6 +44,21 @@ Ou seja: o cupom não é herdado **como desconto**, mas quando a assinatura nasc
 **Forma correta:** criar com `products` (preço cheio do catálogo) e aplicar o cupom só no primeiro ciclo com `PATCH /v1/subscriptions/{id}/cycles/discount` (desconto que vale apenas em um ciclo e substitui o da assinatura).
 
 **Assinaturas já afetadas:** o desconto da assinatura só reduz o valor, e os endpoints de produto respondem `404`, então não há como subir o valor delas pela API. Caminho a testar no sandbox: criar uma nova assinatura com `products` a partir do último pedido pago (um mesmo pedido pode originar mais de uma assinatura) e cancelar a antiga.
+
+### O que os dados reais mostraram (loja Shopify, outubro de 2026)
+
+A primeira sincronização de uma loja real (46 assinaturas abertas) contradiz a documentação:
+
+- Todas as assinaturas foram criadas **com** `products` e com o valor cheio; `discount` vem `null`.
+- Mesmo assim, **toda** cobrança recorrente já feita (10 de 10) saiu com o mesmo desconto do pedido de origem: o pedido do ciclo tem `sub_total` = valor cheio e `discount` = desconto do pedido de origem.
+- O desconto é limitado para a cobrança não ficar abaixo de R$ 5,00. Em assinaturas de teste de R$ 1,00 a cobrança saiu **negativa** (`"-24.51"`).
+- Quando um pedido gera várias assinaturas, o desconto do pedido inteiro é aplicado de novo em cada uma, mas a divisão não fecha com nenhuma regra que conseguimos identificar.
+- Nesses pedidos o frete vem somado em `sub_total` com `shipping_value: 0`, e o frete grátis aparece dentro de `discount`. Por isso o "desconto repetido" inclui o frete grátis do primeiro pedido.
+- Algumas assinaturas têm `freight_value` cadastrado. Pela documentação o frete é somado depois do desconto, nunca é descontado, e não há endpoint para alterá-lo: só na criação da assinatura.
+
+Ainda não sabemos se `PATCH /cycles/discount` com desconto 0 anula esse desconto repetido, que não aparece em `discount`. Isso precisa ser confirmado com a Appmax (ou testado numa assinatura) antes de qualquer correção em massa.
+
+Diferenças de formato em relação à documentação estão anotadas em `packages/appmax/src/types.ts` (`original_order_id`, `charges[].value` como texto, campos extras).
 
 > Pedidos de checkout **Shopify** exigem `products` com `shopify_product_id` + `shopify_variant_id` e o preço vem da variante. Se o cliente vende pela Shopify, a causa do bug é outra e precisa ser investigada.
 

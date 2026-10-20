@@ -13,6 +13,7 @@ const HEADER = [
   "pedido_origem",
   "desconto_origem",
   "diferenca_por_ciclo",
+  "frete_por_ciclo",
   "proxima_cobranca",
   "detalhe",
 ];
@@ -34,6 +35,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
       r.originOrderId,
       reais(r.originDiscountCents),
       reais(r.lossPerCycleCents),
+      reais(r.extraPerCycleCents),
       r.nextChargeAt?.slice(0, 10),
       r.message,
     ]
