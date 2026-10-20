@@ -56,7 +56,19 @@ A primeira sincronização de uma loja real (46 assinaturas abertas) contradiz a
 - Nesses pedidos o frete vem somado em `sub_total` com `shipping_value: 0`, e o frete grátis aparece dentro de `discount`. Por isso o "desconto repetido" inclui o frete grátis do primeiro pedido.
 - Algumas assinaturas têm `freight_value` cadastrado. Pela documentação o frete é somado depois do desconto, nunca é descontado, e não há endpoint para alterá-lo: só na criação da assinatura.
 
-Ainda não sabemos se `PATCH /cycles/discount` com desconto 0 anula esse desconto repetido, que não aparece em `discount`. Isso precisa ser confirmado com a Appmax (ou testado numa assinatura) antes de qualquer correção em massa.
+**Teste em produção (20/10/2026)** numa assinatura de teste: produto de R$ 47,97, pedido de origem com R$ 32,01 de desconto (cupom de 30% + frete grátis por cupom), cobranças feitas com `POST /force-charge`:
+
+| Ajuste antes da cobrança | `discount` na assinatura | Cobrado |
+|---|---|---|
+| `PATCH /cycles/discount` de R$ 40,00 (só o ciclo 1) | `null` | R$ 7,97 |
+| `PATCH /discount` de R$ 40,00 | `40` | R$ 7,97 |
+| `PATCH /discount` de R$ 0,00 | `0` | R$ 47,97 (valor cheio) |
+
+Os dois tipos de desconto **substituem** o desconto repetido, em vez de somar. Com `discount: 0` explícito a cobrança saiu cheia. A hipótese mais simples é que, com `discount: null`, a Appmax usa o desconto do pedido de origem, e qualquer valor explícito (inclusive 0) toma o lugar dele.
+
+Falta um controle: nessa assinatura nenhuma cobrança foi feita sem ajuste, então não está provado que o `force-charge` aplicaria o desconto repetido. Confirmar numa cobrança agendada antes de corrigir em massa.
+
+As cobranças antecipadas também geram pedido na Shopify; o `shopify_order_id` aparece alguns segundos depois da cobrança.
 
 Diferenças de formato em relação à documentação estão anotadas em `packages/appmax/src/types.ts` (`original_order_id`, `charges[].value` como texto, campos extras).
 
