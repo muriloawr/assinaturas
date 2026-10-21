@@ -66,7 +66,9 @@ A primeira sincronização de uma loja real (46 assinaturas abertas) contradiz a
 
 Os dois tipos de desconto **substituem** o desconto repetido, em vez de somar. Com `discount: 0` explícito a cobrança saiu cheia. A hipótese mais simples é que, com `discount: null`, a Appmax usa o desconto do pedido de origem, e qualquer valor explícito (inclusive 0) toma o lugar dele.
 
-Falta um controle: nessa assinatura nenhuma cobrança foi feita sem ajuste, então não está provado que o `force-charge` aplicaria o desconto repetido. Confirmar numa cobrança agendada antes de corrigir em massa.
+**Confirmado numa cobrança agendada (21/10/2026):** assinatura de R$ 54,37 cujo desconto de origem (R$ 17,03) se repetiu nos ciclos 1 e 2 (R$ 37,34 cada). Com `PATCH /discount` `{ "discount": 0 }` na véspera, o ciclo 3 saiu por R$ 54,37, com `discount: 0` no pedido. O assinante não recebe aviso pela alteração do desconto, só a confirmação de pagamento de sempre.
+
+**Correção:** `PATCH /v1/subscriptions/{id}/discount` com `discount: 0` uma vez por assinatura, antes da primeira cobrança recorrente. Em cobrança em atraso a correção só vale a partir do ciclo seguinte.
 
 As cobranças antecipadas também geram pedido na Shopify; o `shopify_order_id` aparece alguns segundos depois da cobrança.
 
